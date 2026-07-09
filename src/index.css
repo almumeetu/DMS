@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+Bengali:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-bengali: "Noto Sans Bengali", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-gotham: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-brand-primary: #000000;
+  --color-brand-color-2: #334155;
+  --color-brand-color-3: #64748b;
+  --color-brand-color-4: #e2e8f0;
+  --color-brand-color-5: #ffffff;
+
+  /* Global light border color overrides */
+  --color-border: #e2e8f0;
+  --color-slate-100: #f8fafc;
+  --color-slate-150: #f8fafc;
+  --color-slate-200: #e2e8f0;
+  --color-slate-205: #e2e8f0;
+  --color-slate-300: #e2e8f0;
+  --color-slate-350: #e2e8f0;
+
+  /* Colored border overrides for consistent light grey */
+  --color-indigo-100: #e2e8f0;
+  --color-indigo-200: #e2e8f0;
+  --color-blue-100: #e2e8f0;
+  --color-blue-200: #e2e8f0;
+  --color-emerald-100: #e2e8f0;
+  --color-emerald-200: #e2e8f0;
+  --color-rose-100: #e2e8f0;
+  --color-rose-200: #e2e8f0;
+  --color-amber-100: #e2e8f0;
+  --color-amber-200: #e2e8f0;
+
+  /* Global border radius overrides to make UI look cleaner and more professional */
+  --radius-3xl: 12px;
+  --radius-2xl: 8px;
+  --radius-xl: 6px;
+  --radius-lg: 4px;
+  --radius-md: 4px;
+  --radius-sm: 2px;
+}
+
+:root {
+  --brand-primary: #000000;
+  --brand-color-2: #334155;
+  --brand-color-3: #64748b;
+  --brand-color-4: #e2e8f0;
+  --brand-color-5: #ffffff;
+}
+
+/* Custom scrollbars for clean modern aesthetic */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Bengali (Noto Sans Bengali) typography tuning
+   — slightly larger line-height and letter-spacing for readability */
+.font-bengali,
+.font-bengali * {
+  font-family: "Noto Sans Bengali", "Inter", ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.7;
+  word-spacing: 0.02em;
+}
+
+/* Bengali headings — tighten line-height a bit */
+.font-bengali h1,
+.font-bengali h2,
+.font-bengali h3,
+.font-bengali h4 {
+  line-height: 1.45;
+}
+
+/* Bengali numbers rendered with Bengali-UI font but keep mono for data tables */
+.font-bengali .font-mono {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  line-height: inherit;
+}
+
+/* 1. Font weight reset rules that allow typography hierarchies (semibold/bold) for headers and numbers */
+.admin-dashboard th {
+  font-weight: 600 !important;
+}
+.admin-dashboard h1,
+.admin-dashboard h2,
+.admin-dashboard h3 {
+  font-weight: 600;
+}
+
+/* Custom modal body thin scrollbar style */
+.modal-body {
+  scroll-behavior: smooth;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+/* Global input fields & form controls styling overrides */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+select,
+textarea {
+  border-color: #e2e8f0 !important; /* Slightly more grey clean border */
+  color: #0f172a !important;        /* Full readable text color */
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="search"]:focus,
+select:focus,
+textarea:focus {
+  border-color: #a5b4fc !important; /* Lighter indigo active border */
+  box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.2) !important; /* Lighter soft focus ring */
+}
