@@ -65,6 +65,7 @@ const KEYS = {
 
 function read<T>(key: string, fallback: T): T {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return fallback;
     const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
@@ -74,6 +75,7 @@ function read<T>(key: string, fallback: T): T {
 
 function write<T>(key: string, value: T): void {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
     console.error('[localStore] write failed:', e);
@@ -344,6 +346,7 @@ export function loadAllData(): AllErpData {
 // ── Seed initial demo data (called once on first run) ─────────────────────────
 
 export function seedInitialData(): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
   const alreadySeeded = localStorage.getItem(KEYS.seeded);
   if (alreadySeeded) return;
 
@@ -368,6 +371,7 @@ export function seedInitialData(): void {
 // ── Clear ALL business data (keeps admin accounts + auth, wipes everything else) ─
 
 export function clearAllData(): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
   const businessKeys: string[] = [
     KEYS.products,
     KEYS.srs,
@@ -410,6 +414,7 @@ export function clearAllData(): void {
 // ── Restore from imported backup ──────────────────────────────────────────────
 
 export function restoreAllData(data: Partial<AllErpData>): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
   if (data.products)          saveProducts(data.products);
   if (data.srs)               saveSRs(data.srs);
   if (data.deliveryMen)       saveDeliveryMen(data.deliveryMen);
