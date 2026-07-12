@@ -119,7 +119,7 @@ export default function ChallanModule({
   const [newBonusQty, setNewBonusQty] = useState<number>(0);
 
   const [newCommissionAmount, setNewCommissionAmount] = useState<number>(0);
-  const [newExtraCommissionAmount, setNewExtraCommissionAmount] = useState<number>(0);
+  const [newExtraProfitAmount, setNewExtraProfitAmount] = useState<number>(0);
   const [newSR, setNewSR] = useState('');
   const [newRoute, setNewRoute] = useState('');
   const [newDeliveryMan, setNewDeliveryMan] = useState('');
@@ -442,7 +442,7 @@ export default function ChallanModule({
     const createdAt = new Date().toISOString();
     const totalGross = newChallanItems.reduce((sum, item) => sum + (item.qty * item.rate), 0);
     const challanComm = Number(newCommissionAmount) || 0;
-    const challanExtraComm = Number(newExtraCommissionAmount) || 0;
+    const challanExtraProfit = Number(newExtraProfitAmount) || 0;
 
     const srObj = srs.find(s => s.name === newSR);
     const commissionRate = srObj ? srObj.commissionRate : 5;
@@ -451,8 +451,8 @@ export default function ChallanModule({
       const baseAmount = item.qty * item.rate;
       const share = totalGross > 0 ? baseAmount / totalGross : 0;
       const itemComm = challanComm * share;
-      const itemExtraComm = challanExtraComm * share;
-      const totalAmount = baseAmount - itemComm - itemExtraComm;
+      const itemExtraProfit = challanExtraProfit * share;
+      const totalAmount = baseAmount - itemComm + itemExtraProfit;
       const srCommissionAmount = totalAmount * (commissionRate / 100);
 
       const prodObj = products.find(p => p.name === item.productName);
@@ -475,7 +475,8 @@ export default function ChallanModule({
         returnedQty: 0,
         damagedQty: 0,
         commissionAmount: itemComm,
-        extraCommissionAmount: itemExtraComm,
+        extraProfitAmount: itemExtraProfit,
+        extraCommissionAmount: itemExtraProfit, // for backward compatibility
         createdAt,
         srCommissionType: 'Fixed',
         srCommissionValue: commissionRate,
@@ -512,7 +513,7 @@ export default function ChallanModule({
     setNewQty(10);
     setNewBonusQty(0);
     setNewCommissionAmount(0);
-    setNewExtraCommissionAmount(0);
+    setNewExtraProfitAmount(0);
     setNewSR('');
     setNewRoute('');
     setNewDeliveryMan('');
@@ -1665,15 +1666,15 @@ export default function ChallanModule({
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">{language === 'bn' ? 'অতিরিক্ত কমিশন (টাকা)' : 'Extra Commission (Tk)'}</label>
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">{language === 'bn' ? 'অতিরিক্ত লাভ (টাকা)' : 'Extra Profit (Tk)'}</label>
                       <input
-                        id="new-challan-extra-commission-input"
+                        id="new-challan-extra-profit-input"
                         type="number"
                         min="0"
                         step="0.01"
-                        value={newExtraCommissionAmount}
-                        onChange={(e) => setNewExtraCommissionAmount(Number(e.target.value))}
-                        className="h-11 w-full rounded-lg border border-purple-200 bg-purple-50/30 px-4 text-sm font-semibold outline-none transition-colors focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                        value={newExtraProfitAmount}
+                        onChange={(e) => setNewExtraProfitAmount(Number(e.target.value))}
+                        className="h-11 w-full rounded-lg border border-emerald-200 bg-emerald-50/30 px-4 text-sm font-semibold outline-none transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                       />
                     </div>
                   </div>
@@ -1683,8 +1684,8 @@ export default function ChallanModule({
                     {(() => {
                       const gross = newChallanItems.reduce((sum, item) => sum + (item.qty * item.rate), 0);
                       const comm = Number(newCommissionAmount) || 0;
-                      const extraComm = Number(newExtraCommissionAmount) || 0;
-                      const net = gross - comm - extraComm;
+                      const extraProfit = Number(newExtraProfitAmount) || 0;
+                      const net = gross - comm + extraProfit;
                       return (
                         <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1.5 text-xs">
                           <div className="flex justify-between text-slate-500 font-semibold">
@@ -1697,10 +1698,10 @@ export default function ChallanModule({
                               <span className="font-mono">- ৳{comm.toLocaleString('en-BD')}</span>
                             </div>
                           )}
-                          {extraComm > 0 && (
-                            <div className="flex justify-between text-purple-600 font-semibold">
-                              <span>{language === 'bn' ? 'অতিরিক্ত কমিশন' : 'Extra Commission'}</span>
-                              <span className="font-mono">- ৳{extraComm.toLocaleString('en-BD')}</span>
+                          {extraProfit > 0 && (
+                            <div className="flex justify-between text-emerald-600 font-semibold">
+                              <span>{language === 'bn' ? 'অতিরিক্ত লাভ' : 'Extra Profit'}</span>
+                              <span className="font-mono">+ ৳{extraProfit.toLocaleString('en-BD')}</span>
                             </div>
                           )}
                           <div className="flex justify-between border-t border-slate-200 pt-1.5 font-bold text-sm">

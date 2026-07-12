@@ -155,8 +155,9 @@ export function useDashboardMetrics(
     const map = new Map<string, { count: number; total: number }>();
     srs.forEach(sr => {
       const srChallans = challans.filter(ch => ch.srName === sr.name);
+      const srDeliveredChallans = srChallans.filter(ch => ch.status === 'Delivered');
       const total      = sumSales(srChallans);
-      map.set(sr.id, { count: srChallans.length, total });
+      map.set(sr.id, { count: srDeliveredChallans.length, total });
     });
     return map;
   }, [srs, challans]);

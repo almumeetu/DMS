@@ -195,7 +195,7 @@ export default function App() {
         <SellModule products={db.products} setProducts={db.syncProducts}
           attributes={db.attributes} srs={db.srs} routes={db.routes}
           deliveryMen={db.deliveryMen} setChallans={db.syncChallans}
-          categories={db.productCategories}
+          categories={db.productCategories} units={db.units}
           onNavigate={handleNavigate} language={language} />
       );
       case 'delivery': return (
@@ -245,7 +245,7 @@ export default function App() {
       case 'reports': return (
         <ReportsModule products={db.products} challans={db.challans} srs={db.srs}
           companies={db.companies} expenses={db.expenses} deliveryMen={db.deliveryMen}
-          language={language} userRole={userRole} />
+          units={db.units} language={language} userRole={userRole} />
       );
       case 'settings': return (
         <SettingsModule shopName={db.shopName} setShopName={db.syncShopName}

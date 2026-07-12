@@ -15,8 +15,34 @@ import {
   ArrowRightLeft,
   ClipboardList
 } from 'lucide-react';
-import { Product, ChallanItem, SR, CompanyBrand, ExpenseRecord, DeliveryMan } from '../types';
+import { Product, ChallanItem, SR, CompanyBrand, ExpenseRecord, DeliveryMan, UnitOfMeasure } from '../types';
 import { translations, Language } from '../translations';
+
+function UnitDisplay({ qty, units, uomId }: { qty: number, units: UnitOfMeasure[], uomId?: string }) {
+  // If product has a specific uomId, use only that unit
+  if (uomId) {
+    const unit = units.find(u => u.id === uomId);
+    if (unit) {
+      const unitQty = qty / unit.multiplier;
+      const qtyStr = Number.isInteger(unitQty)
+        ? unitQty.toLocaleString()
+        : unitQty.toFixed(1);
+      return (
+        <div className="font-mono text-[11px]">
+          {qtyStr} {unit.symbol || unit.name}
+        </div>
+      );
+    }
+  }
+  
+  // Fallback: show only base unit (pieces) for totals
+  const baseUnit = units.find(u => !u.parentUnitId) || units[0];
+  return (
+    <div className="font-mono text-[11px]">
+      {qty.toLocaleString()} {baseUnit.symbol || baseUnit.name}
+    </div>
+  );
+}
 
 interface ReportsModuleProps {
   products: Product[];
@@ -25,6 +51,7 @@ interface ReportsModuleProps {
   companies: CompanyBrand[];
   deliveryMen: DeliveryMan[];
   expenses: ExpenseRecord[];
+  units: UnitOfMeasure[];
   language: Language;
   userRole?: 'admin' | 'sr';
 }
@@ -38,6 +65,7 @@ export default function ReportsModule({
   companies,
   deliveryMen,
   expenses,
+  units,
   language,
   userRole = 'admin'
 }: ReportsModuleProps) {
@@ -46,6 +74,10 @@ export default function ReportsModule({
 
   // Tabs (restricted to stock/sales for SR)
   const [activeTab, setActiveTab] = useState<ReportTab>('stock');
+  
+  // Sub-tabs for stock and sales reports
+  const [stockSubTab, setStockSubTab] = useState<'company' | 'product'>('company');
+  const [salesSubTab, setSalesSubTab] = useState<'company' | 'sr' | 'dm' | 'product' | 'unit'>('company');
 
   // Date Presets State
   const [preset, setPreset] = useState('custom');
@@ -92,7 +124,7 @@ export default function ReportsModule({
     return Array.from(new Set(products.map(p => p.company).filter(Boolean)));
   }, [products]);
 
-  // Filtered Challans based on date range and global filters
+  // Filtered Challans based on date range, global filters, and only Delivered status
   const filteredChallans = useMemo(() => {
     return challans.filter(ch => {
       if (!ch.createdAt) return true;
@@ -101,7 +133,8 @@ export default function ReportsModule({
       const matchesCompany = selectedCompanyFilter === 'All' || ch.company === selectedCompanyFilter;
       const matchesSR = selectedSrFilter === 'All' || ch.srName.toLowerCase() === selectedSrFilter.toLowerCase();
       const matchesDM = selectedDeliveryManFilter === 'All' || ch.deliveryManName.toLowerCase() === selectedDeliveryManFilter.toLowerCase();
-      return matchesDate && matchesCompany && matchesSR && matchesDM;
+      const matchesStatus = ch.status === 'Delivered'; // Only Delivered challans count
+      return matchesDate && matchesCompany && matchesSR && matchesDM && matchesStatus;
     });
   }, [challans, startDate, endDate, selectedCompanyFilter, selectedSrFilter, selectedDeliveryManFilter]);
 
@@ -113,24 +146,28 @@ export default function ReportsModule({
       ? Array.from(new Set(products.map(p => p.company).filter(Boolean)))
       : [selectedCompanyFilter];
     let grandQty = 0;
-    let grandValue = 0;
+    let grandValueDP = 0;
+    let grandValueTP = 0;
 
     const rows = brandList.map(brandName => {
       const brandProducts = products.filter(p => p.company === brandName);
       const totalQty = brandProducts.reduce((sum, p) => sum + p.currentStock, 0);
-      const totalValue = brandProducts.reduce((sum, p) => sum + (p.currentStock * p.defaultPP), 0);
+      const totalValueDP = brandProducts.reduce((sum, p) => sum + (p.currentStock * p.defaultPP), 0);
+      const totalValueTP = brandProducts.reduce((sum, p) => sum + (p.currentStock * p.defaultWSP), 0);
 
       grandQty += totalQty;
-      grandValue += totalValue;
+      grandValueDP += totalValueDP;
+      grandValueTP += totalValueTP;
 
       return {
         companyName: brandName,
         totalQty,
-        totalValue
+        totalValueDP,
+        totalValueTP
       };
     });
 
-    return { rows, grandQty, grandValue };
+    return { rows, grandQty, grandValueDP, grandValueTP };
   }, [products, selectedCompanyFilter]);
 
   // ═══════════════════════════════════════════════════════════════
@@ -147,11 +184,16 @@ export default function ReportsModule({
       const revenue = brandChallans.reduce((sum, ch) => sum + ch.totalAmount, 0);
       const returns = brandChallans.reduce((sum, ch) => sum + (ch.returnedQty || 0), 0);
       const damages = brandChallans.reduce((sum, ch) => sum + (ch.damagedQty || 0), 0);
+      const dpTotal = brandChallans.reduce((sum, ch) => {
+        const product = products.find(p => p.name === ch.productName);
+        return sum + ((product?.defaultPP || 0) * ch.qty);
+      }, 0);
 
       return {
         companyName: brandName,
         unitsSold,
         revenue,
+        dpTotal,
         returns,
         damages
       };
@@ -194,6 +236,10 @@ export default function ReportsModule({
       const returns = dmChallans.reduce((sum, ch) => sum + (ch.returnedQty || 0), 0);
       const damages = dmChallans.reduce((sum, ch) => sum + (ch.damagedQty || 0), 0);
       const totalChallans = dmChallans.length;
+      const dpTotal = dmChallans.reduce((sum, ch) => {
+        const product = products.find(p => p.name === ch.productName);
+        return sum + ((product?.defaultPP || 0) * ch.qty);
+      }, 0);
 
       return {
         dmName: dm.name,
@@ -202,7 +248,8 @@ export default function ReportsModule({
         revenue,
         returns,
         damages,
-        totalChallans
+        totalChallans,
+        dpTotal
       };
     });
 
@@ -213,6 +260,7 @@ export default function ReportsModule({
       const revenue = pChallans.reduce((sum, ch) => sum + ch.totalAmount, 0);
       const returns = pChallans.reduce((sum, ch) => sum + (ch.returnedQty || 0), 0);
       const damages = pChallans.reduce((sum, ch) => sum + (ch.damagedQty || 0), 0);
+      const dpTotal = unitsSold * p.defaultPP;
 
       return {
         productName: p.name,
@@ -221,14 +269,46 @@ export default function ReportsModule({
         unitsSold,
         revenue,
         returns,
-        damages
+        damages,
+        dpTotal,
+        uomId: p.uomId
       };
     }).filter(row => {
       const matchesCompany = selectedCompanyFilter === 'All' || row.company === selectedCompanyFilter;
       return matchesCompany && (row.unitsSold > 0 || row.returns > 0 || row.damages > 0);
     });
 
-    return { companySales, srSales, dmSales, productSales };
+    // E. Unit-wise Sales
+    const unitSales = units.map(unit => {
+      // For each product that uses this unit (or all, but let's calculate all sold quantity)
+      const unitChallans = filteredChallans.filter(ch => {
+        // Find product, then check if its uomId is this unit
+        const product = products.find(p => p.name.toLowerCase() === ch.productName.toLowerCase());
+        return product?.uomId === unit.id;
+      });
+      
+      const unitsSold = unitChallans.reduce((sum, ch) => sum + ch.qty, 0);
+      const revenue = unitChallans.reduce((sum, ch) => sum + ch.totalAmount, 0);
+      const returns = unitChallans.reduce((sum, ch) => sum + (ch.returnedQty || 0), 0);
+      const damages = unitChallans.reduce((sum, ch) => sum + (ch.damagedQty || 0), 0);
+      const dpTotal = unitChallans.reduce((sum, ch) => {
+        const product = products.find(p => p.name.toLowerCase() === ch.productName.toLowerCase());
+        return sum + ((product?.defaultPP || 0) * ch.qty);
+      }, 0);
+      
+      return {
+        unitId: unit.id,
+        unitName: unit.name,
+        unitSymbol: unit.symbol || unit.name,
+        unitsSold,
+        returns,
+        damages,
+        dpTotal,
+        revenue
+      };
+    }).filter(row => row.unitsSold > 0 || row.returns > 0 || row.damages > 0);
+
+    return { companySales, srSales, dmSales, productSales, unitSales };
   }, [filteredChallans, products, srs, deliveryMen, selectedCompanyFilter, selectedSrFilter, selectedDeliveryManFilter]);
 
   // ═══════════════════════════════════════════════════════════════
@@ -475,11 +555,12 @@ export default function ReportsModule({
       doc.rect(14, y - 5, 182, 8, 'F');
       doc.setDrawColor(226, 232, 240);
       doc.line(14, y + 3, 196, y + 3);
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.setTextColor(71, 85, 105);
       doc.text(language === 'bn' ? 'কোম্পানি' : 'COMPANY BRAND', 16, y - 1);
-      doc.text(language === 'bn' ? 'স্টক পরিমাণ' : 'STOCK QUANTITY', 80, y - 1);
-      doc.text(language === 'bn' ? 'স্টক মূল্য (TK)' : 'STOCK VALUE (TK)', 140, y - 1);
+      doc.text(language === 'bn' ? 'স্টক পরিমাণ' : 'STOCK QUANTITY', 75, y - 1);
+      doc.text(language === 'bn' ? 'স্টক মূল্য (DP)' : 'STOCK VALUE (DP)', 115, y - 1);
+      doc.text(language === 'bn' ? 'স্টক মূল্য (TP)' : 'STOCK VALUE (TP)', 155, y - 1);
       y += 10;
 
       // Table Rows
@@ -487,8 +568,9 @@ export default function ReportsModule({
       doc.setTextColor(30, 41, 59);
       stockReportData.rows.forEach(row => {
         doc.text(row.companyName, 16, y);
-        doc.text(`${row.totalQty.toLocaleString()} units`, 80, y);
-        doc.text(`TK ${row.totalValue.toLocaleString()}`, 140, y);
+        doc.text(`${row.totalQty.toLocaleString()} units`, 75, y);
+        doc.text(`TK ${row.totalValueDP.toLocaleString()}`, 115, y);
+        doc.text(`TK ${row.totalValueTP.toLocaleString()}`, 155, y);
         y += 8;
       });
 
@@ -496,8 +578,9 @@ export default function ReportsModule({
       doc.line(14, y - 4, 196, y - 4);
       doc.setFont('helvetica', 'bold');
       doc.text(language === 'bn' ? 'সর্বমোট' : 'GRAND TOTAL', 16, y);
-      doc.text(`${stockReportData.grandQty.toLocaleString()} units`, 80, y);
-      doc.text(`TK ${stockReportData.grandValue.toLocaleString()}`, 140, y);
+      doc.text(`${stockReportData.grandQty.toLocaleString()} units`, 75, y);
+      doc.text(`TK ${stockReportData.grandValueDP.toLocaleString()}`, 115, y);
+      doc.text(`TK ${stockReportData.grandValueTP.toLocaleString()}`, 155, y);
     } 
     else if (activeTab === 'sales') {
       const checkPageBreak = (heightNeeded: number) => {
@@ -522,10 +605,11 @@ export default function ReportsModule({
       doc.setFontSize(8.5);
       doc.setTextColor(71, 85, 105);
       doc.text(language === 'bn' ? 'কোম্পানি' : 'COMPANY', 16, y - 1);
-      doc.text(language === 'bn' ? 'বিক্রিত ইউনিট' : 'UNITS SOLD', 65, y - 1);
-      doc.text(language === 'bn' ? 'ফেরত' : 'RETURNS', 105, y - 1);
-      doc.text(language === 'bn' ? 'ক্ষতিগ্রস্ত' : 'DAMAGES', 135, y - 1);
-      doc.text(language === 'bn' ? 'মোট বিক্রয় (TK)' : 'TOTAL SALES (TK)', 160, y - 1);
+                  doc.text(language === 'bn' ? 'বিক্রিত ইউনিট' : 'UNITS SOLD', 55, y - 1);
+                  doc.text(language === 'bn' ? 'ফেরত' : 'RETURNS', 85, y - 1);
+                  doc.text(language === 'bn' ? 'ক্ষতিগ্রস্ত' : 'DAMAGES', 110, y - 1);
+                  doc.text(language === 'bn' ? 'মোট বিক্রয় (DP)' : 'TOTAL SALES (DP)', 135, y - 1);
+                  doc.text(language === 'bn' ? 'মোট বিক্রয় (TP)' : 'TOTAL SALES (TP)', 165, y - 1);
       y += 10;
 
       doc.setFont('helvetica', 'normal');
@@ -533,10 +617,11 @@ export default function ReportsModule({
       salesReportData.companySales.forEach(row => {
         checkPageBreak(8);
         doc.text(row.companyName, 16, y);
-        doc.text(row.unitsSold.toString(), 65, y);
-        doc.text(row.returns.toString(), 105, y);
-        doc.text(row.damages.toString(), 135, y);
-        doc.text(`TK ${row.revenue.toLocaleString()}`, 160, y);
+        doc.text(row.unitsSold.toString(), 55, y);
+        doc.text(row.returns.toString(), 85, y);
+        doc.text(row.damages.toString(), 110, y);
+        doc.text(`TK ${row.dpTotal.toLocaleString()}`, 135, y);
+        doc.text(`TK ${row.revenue.toLocaleString()}`, 165, y);
         y += 8;
       });
 
@@ -554,11 +639,11 @@ export default function ReportsModule({
       doc.setFontSize(8.5);
       doc.setTextColor(71, 85, 105);
       doc.text(language === 'bn' ? 'এসআর (SR)' : 'SR NAME', 16, y - 1);
-      doc.text(language === 'bn' ? 'বিক্রিত ইউনিট' : 'UNITS', 65, y - 1);
-      doc.text(language === 'bn' ? 'ফেরত' : 'RET', 95, y - 1);
-      doc.text(language === 'bn' ? 'ক্ষতিগ্রস্ত' : 'DMG', 115, y - 1);
-      doc.text(language === 'bn' ? 'ডিপি (TK)' : 'DP PRICE', 135, y - 1);
-      doc.text(language === 'bn' ? 'বিক্রয় (TK)' : 'REVENUE', 165, y - 1);
+                  doc.text(language === 'bn' ? 'বিক্রিত ইউনিট' : 'UNITS', 65, y - 1);
+                  doc.text(language === 'bn' ? 'ফেরত' : 'RET', 95, y - 1);
+                  doc.text(language === 'bn' ? 'ক্ষতিগ্রস্ত' : 'DMG', 115, y - 1);
+                  doc.text(language === 'bn' ? 'মোট বিক্রয় (DP)' : 'TOTAL SALES (DP)', 135, y - 1);
+                  doc.text(language === 'bn' ? 'মোট বিক্রয় (TP)' : 'TOTAL SALES (TP)', 165, y - 1);
       y += 10;
 
       doc.setFont('helvetica', 'normal');
@@ -911,7 +996,7 @@ export default function ReportsModule({
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              {language === 'bn' ? 'ডিপি প্রাইস' : 'DP Price List'}
+              {language === 'bn' ? 'প্রাইস লিস্ট' : 'Price List'}
             </button>
             <button
               onClick={() => setActiveTab('dayend')}
@@ -929,127 +1014,115 @@ export default function ReportsModule({
 
       {/* TAB CONTENT: STOCK REPORT */}
       {activeTab === 'stock' && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-          <div className="border-b border-slate-100 pb-3">
-            <h3 className="font-bold text-slate-800 text-sm">{t.companyStockTitle}</h3>
+        <div className="space-y-6">
+          {/* Stock report sub-tabs */}
+          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-2xl w-fit">
+            <button
+              onClick={() => setStockSubTab('company')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                stockSubTab === 'company'
+                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {language === 'bn' ? 'কোম্পানি ভিত্তিক' : 'Company Summary'}
+            </button>
+            <button
+              onClick={() => setStockSubTab('product')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                stockSubTab === 'product'
+                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {language === 'bn' ? 'পণ্য ভিত্তিক' : 'Product Details'}
+            </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                  <th className="px-4 py-3">{language === 'bn' ? 'কোম্পানি' : 'Company'}</th>
-                  <th className="px-4 py-3 text-center">{language === 'bn' ? 'স্টক পরিমাণ' : 'Total Units'}</th>
-                  <th className="px-4 py-3 text-right">{language === 'bn' ? 'স্টক মূল্য (TK)' : 'Stock Valuation (DP)'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {stockReportData.rows.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                    <td className="px-4 py-3.5 font-bold text-slate-850">{row.companyName}</td>
-                    <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.totalQty.toLocaleString()} Pcs</td>
-                    <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.totalValue)}</td>
-                  </tr>
-                ))}
-                {/* Grand Total Row */}
-                <tr className="bg-slate-50 border-t-2 border-slate-200 font-extrabold text-slate-900">
-                  <td className="px-4 py-4">{language === 'bn' ? 'সর্বমোট স্টক' : 'GRAND TOTAL STOCK'}</td>
-                  <td className="px-4 py-4 text-center font-mono">{stockReportData.grandQty.toLocaleString()} Pcs</td>
-                  <td className="px-4 py-4 text-right font-mono text-indigo-605">{formatBDT(stockReportData.grandValue)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {/* Stock report sub-tab content */}
+          {stockSubTab === 'company' && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-slate-800 text-sm">{t.companyStockTitle}</h3>
+              </div>
 
-          {/* Delivery Man-wise Sales Breakdown */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm">
-                {language === 'bn' ? 'ডেলিভারি ম্যানভিত্তিক বিক্রয় বিবরণী' : 'Delivery Man-wise Sales Breakdown'}
-              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
+                      <th className="px-4 py-3">{language === 'bn' ? 'কোম্পানি' : 'Company'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'স্টক পরিমাণ' : 'Total Units'}</th>
+                      <th className="px-4 py-3 text-right text-indigo-600">{language === 'bn' ? 'স্টক মূল্য (DP)' : 'Stock Valuation (DP)'}</th>
+                      <th className="px-4 py-3 text-right text-emerald-600">{language === 'bn' ? 'স্টক মূল্য (TP)' : 'Stock Valuation (TP)'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {stockReportData.rows.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="px-4 py-3.5 font-bold text-slate-850">{row.companyName}</td>
+                        <td className="px-4 py-3.5 text-center">
+                          <UnitDisplay qty={row.totalQty} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-indigo-700">{formatBDT(row.totalValueDP)}</td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-700">{formatBDT(row.totalValueTP)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-slate-50 border-t-2 border-slate-200 font-extrabold text-slate-900">
+                      <td className="px-4 py-4">{language === 'bn' ? 'সর্বমোট স্টক' : 'GRAND TOTAL STOCK'}</td>
+                      <td className="px-4 py-4 text-center">
+                        <UnitDisplay qty={stockReportData.grandQty} units={units} />
+                      </td>
+                      <td className="px-4 py-4 text-right font-mono text-indigo-605">{formatBDT(stockReportData.grandValueDP)}</td>
+                      <td className="px-4 py-4 text-right font-mono text-emerald-605">{formatBDT(stockReportData.grandValueTP)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
+          )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-3">{language === 'bn' ? 'ডেলিভারি ম্যান' : 'Delivery Officer / Man'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'মোট চালান' : 'Total Challans'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ডেলিভারি ইউনিট' : 'Delivered Units'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'মোট ডেলিভারি মূল্য (TK)' : 'Total Delivered (Tk)'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {salesReportData.dmSales.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-850">
-                        <div>{row.dmName}</div>
-                        <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.vehicle}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-600">{row.totalChallans}</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.unitsSold.toLocaleString()} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">{row.returns} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">{row.damages} Pcs</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.revenue)}</td>
-                    </tr>
-                  ))}
-                  {salesReportData.dmSales.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400 font-semibold">
-                        {language === 'bn' ? 'কোনো ডেলিভারি ডেটা পাওয়া যায়নি।' : 'No delivery data available.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {stockSubTab === 'product' && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-slate-800 text-sm">
+                  {language === 'bn' ? 'পণ্যভিত্তিক স্টক বিস্তারিত' : 'Product-wise Stock Details'}
+                </h3>
+              </div>
 
-          {/* Product-wise Sales Breakdown */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm">
-                {language === 'bn' ? 'পণ্যভিত্তিক বিক্রয় বিবরণী' : 'Product-wise Sales Breakdown'}
-              </h3>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-3">{language === 'bn' ? 'পণ্যের নাম ও কোম্পানি' : 'Product Name & Brand'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'বিক্রিত ইউনিট' : 'Units Sold'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'মোট বিক্রয় মূল্য (TK)' : 'Total Sales Price (TP)'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {salesReportData.productSales.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-850">
-                        <div>{row.productName}</div>
-                        <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.sku} · {row.company}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.unitsSold.toLocaleString()} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">{row.returns} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">{row.damages} Pcs</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.revenue)}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
+                      <th className="px-4 py-3">{language === 'bn' ? 'পণ্যের নাম' : 'Product Name'}</th>
+                      <th className="px-4 py-3">{language === 'bn' ? 'কোম্পানি' : 'Company'}</th>
+                      <th className="px-4 py-3">{language === 'bn' ? 'SKU' : 'SKU'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'বর্তমান স্টক' : 'Current Stock'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত স্টক' : 'Damaged Stock'}</th>
+                      <th className="px-4 py-3 text-right text-indigo-600">{language === 'bn' ? 'স্টক মূল্য (DP)' : 'Stock Value (DP)'}</th>
+                      <th className="px-4 py-3 text-right text-emerald-600">{language === 'bn' ? 'স্টক মূল্য (TP)' : 'Stock Value (TP)'}</th>
                     </tr>
-                  ))}
-                  {salesReportData.productSales.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400 font-semibold">
-                        {language === 'bn' ? 'কোনো পণ্য বিক্রির ডেটা পাওয়া যায়নি।' : 'No product sales data available.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {products.map((product, idx) => (
+                      <tr key={product.id} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="px-4 py-3.5 font-bold text-slate-850">{product.name}</td>
+                        <td className="px-4 py-3.5 text-slate-600">{product.company}</td>
+                        <td className="px-4 py-3.5 text-slate-500 font-mono text-[10px]">{product.sku}</td>
+                        <td className="px-4 py-3.5 text-center">
+                          <UnitDisplay qty={product.currentStock} units={units} uomId={product.uomId} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <UnitDisplay qty={product.damagedStock || 0} units={units} uomId={product.uomId} />
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-indigo-700">{formatBDT(product.currentStock * product.defaultPP)}</td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-700">{formatBDT(product.currentStock * product.defaultWSP)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -1129,164 +1202,327 @@ export default function ReportsModule({
 
       {activeTab === 'sales' && (
         <div className="space-y-6">
-          {/* Company-wise Sales Breakdown */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm">{t.companySalesTitle}</h3>
+          {/* Sales Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">{language === 'bn' ? 'মোট বিক্রয় (TP)' : 'Total Sales (TP)'}</p>
+              <p className="text-2xl font-black text-slate-800 font-mono">
+                {formatBDT(salesReportData.companySales.reduce((sum, row) => sum + row.revenue, 0))}
+              </p>
             </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-3">{language === 'bn' ? 'কোম্পানি' : 'Company'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'বিক্রিত ইউনিট' : 'Units Sold'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'মোট বিক্রয় মূল্য (TK)' : 'Total Sales Price (TP)'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {salesReportData.companySales.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-850">{row.companyName}</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.unitsSold.toLocaleString()} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">{row.returns} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">{row.damages} Pcs</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.revenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <p className="text-[10px] font-bold uppercase text-indigo-500 tracking-wider mb-2">{language === 'bn' ? 'মোট বিক্রয় (DP)' : 'Total Sales (DP)'}</p>
+              <p className="text-2xl font-black text-indigo-700 font-mono">
+                {formatBDT(salesReportData.companySales.reduce((sum, row) => sum + row.dpTotal, 0))}
+              </p>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">{language === 'bn' ? 'মোট বিক্রিত ইউনিট' : 'Total Units Sold'}</p>
+              <UnitDisplay qty={salesReportData.companySales.reduce((sum, row) => sum + row.unitsSold, 0)} units={units} />
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <p className="text-[10px] font-bold uppercase text-rose-500 tracking-wider mb-2">{language === 'bn' ? 'মোট রিটার্ন/ড্যামেজ' : 'Total Returns/Damages'}</p>
+              <UnitDisplay qty={salesReportData.companySales.reduce((sum, row) => sum + row.returns + row.damages, 0)} units={units} />
             </div>
           </div>
 
-          {/* SR-wise Sales Breakdown */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm">{t.srSalesTitle}</h3>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-3">{language === 'bn' ? 'সেলস অফিসার (SR)' : 'Sales Officer (SR)'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'বিক্রিত ইউনিট' : 'Units Sold'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'ডিপি (TK)' : 'DP Price (Tk)'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'বিক্রয় মূল্য (TK)' : 'Total Sales (TP)'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {salesReportData.srSales.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-850">
-                        <div>{row.srName}</div>
-                        <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.phone}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.unitsSold.toLocaleString()} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">{row.returns} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">{row.damages} Pcs</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-600">{formatBDT(row.dpTotal)}</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.revenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {/* Sales report sub-tabs */}
+          <div className="flex flex-wrap items-center gap-2 bg-slate-100 p-1 rounded-2xl w-fit">
+            <button
+              onClick={() => setSalesSubTab('company')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                salesSubTab === 'company'
+                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {language === 'bn' ? 'কোম্পানি ভিত্তিক' : 'Company-wise'}
+            </button>
+            <button
+              onClick={() => setSalesSubTab('sr')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                salesSubTab === 'sr'
+                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {language === 'bn' ? 'SR ভিত্তিক' : 'SR-wise'}
+            </button>
+            <button
+              onClick={() => setSalesSubTab('dm')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                salesSubTab === 'dm'
+                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {language === 'bn' ? 'ডেলিভারি ম্যান' : 'Delivery Man'}
+            </button>
+            <button
+              onClick={() => setSalesSubTab('product')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                salesSubTab === 'product'
+                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {language === 'bn' ? 'পণ্য ভিত্তিক' : 'Product-wise'}
+            </button>
+            <button
+              onClick={() => setSalesSubTab('unit')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                salesSubTab === 'unit'
+                  ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {language === 'bn' ? 'ইউনিট ভিত্তিক' : 'Unit-wise'}
+            </button>
           </div>
 
-          {/* Delivery Man-wise Sales Breakdown */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm">
-                {language === 'bn' ? 'ডেলিভারি ম্যানভিত্তিক বিক্রয় বিবরণী' : 'Delivery Man-wise Sales Breakdown'}
-              </h3>
+          {/* Sales report sub-tab content */}
+          {salesSubTab === 'company' && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-slate-800 text-sm">{t.companySalesTitle}</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
+                      <th className="px-4 py-3">{language === 'bn' ? 'কোম্পানি' : 'Company'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'বিক্রিত ইউনিট' : 'Units Sold'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
+                      <th className="px-4 py-3 text-right text-indigo-600">{language === 'bn' ? 'মোট বিক্রয় (DP)' : 'Total Sales (DP)'}</th>
+                      <th className="px-4 py-3 text-right text-emerald-600">{language === 'bn' ? 'মোট বিক্রয় (TP)' : 'Total Sales (TP)'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {salesReportData.companySales.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="px-4 py-3.5 font-bold text-slate-850">{row.companyName}</td>
+                        <td className="px-4 py-3.5 text-center">
+                          <UnitDisplay qty={row.unitsSold} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">
+                          <UnitDisplay qty={row.returns} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">
+                          <UnitDisplay qty={row.damages} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-indigo-700">{formatBDT(row.dpTotal)}</td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-700">{formatBDT(row.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
+          )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-3">{language === 'bn' ? 'ডেলিভারি ম্যান' : 'Delivery Officer / Man'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'মোট চালান' : 'Total Challans'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ডেলিভারি ইউনিট' : 'Delivered Units'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'মোট ডেলিভারি মূল্য (TK)' : 'Total Delivered (Tk)'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {salesReportData.dmSales.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-850">
-                        <div>{row.dmName}</div>
-                        <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.vehicle}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-600">{row.totalChallans}</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.unitsSold.toLocaleString()} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">{row.returns} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">{row.damages} Pcs</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.revenue)}</td>
+          {salesSubTab === 'sr' && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-slate-800 text-sm">{t.srSalesTitle}</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
+                      <th className="px-4 py-3">{language === 'bn' ? 'সেলস অফিসার (SR)' : 'Sales Officer (SR)'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'বিক্রিত ইউনিট' : 'Units Sold'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
+                      <th className="px-4 py-3 text-right text-indigo-600">{language === 'bn' ? 'মোট বিক্রয় (DP)' : 'Total Sales (DP)'}</th>
+                      <th className="px-4 py-3 text-right text-emerald-600">{language === 'bn' ? 'মোট বিক্রয় (TP)' : 'Total Sales (TP)'}</th>
                     </tr>
-                  ))}
-                  {salesReportData.dmSales.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400 font-semibold">
-                        {language === 'bn' ? 'কোনো ডেলিভারি ডেটা পাওয়া যায়নি।' : 'No delivery data available.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {salesReportData.srSales.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="px-4 py-3.5 font-bold text-slate-850">
+                          <div>{row.srName}</div>
+                          <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.phone}</div>
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">
+                          <UnitDisplay qty={row.unitsSold} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">
+                          <UnitDisplay qty={row.returns} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">
+                          <UnitDisplay qty={row.damages} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-indigo-700">{formatBDT(row.dpTotal)}</td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-700">{formatBDT(row.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Product-wise Sales Breakdown */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm">
-                {language === 'bn' ? 'পণ্যভিত্তিক বিক্রয় বিবরণী' : 'Product-wise Sales Breakdown'}
-              </h3>
+          {salesSubTab === 'dm' && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-slate-800 text-sm">
+                  {language === 'bn' ? 'ডেলিভারি ম্যানভিত্তিক বিক্রয় বিবরণী' : 'Delivery Man-wise Sales Breakdown'}
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
+                      <th className="px-4 py-3">{language === 'bn' ? 'ডেলিভারি ম্যান' : 'Delivery Officer / Man'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'মোট চালান' : 'Total Challans'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ডেলিভারি ইউনিট' : 'Delivered Units'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
+                      <th className="px-4 py-3 text-right text-indigo-600">{language === 'bn' ? 'মোট বিক্রয় (DP)' : 'Total Sales (DP)'}</th>
+                      <th className="px-4 py-3 text-right text-emerald-600">{language === 'bn' ? 'মোট বিক্রয় (TP)' : 'Total Sales (TP)'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {salesReportData.dmSales.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="px-4 py-3.5 font-bold text-slate-850">
+                          <div>{row.dmName}</div>
+                          <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.vehicle}</div>
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-600">{row.totalChallans}</td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">
+                          <UnitDisplay qty={row.unitsSold} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">
+                          <UnitDisplay qty={row.returns} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">
+                          <UnitDisplay qty={row.damages} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-indigo-700">{formatBDT(row.dpTotal)}</td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-700">{formatBDT(row.revenue)}</td>
+                      </tr>
+                    ))}
+                    {salesReportData.dmSales.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-8 text-center text-slate-400 font-semibold">
+                          {language === 'bn' ? 'কোনো ডেলিভারি ডেটা পাওয়া যায়নি।' : 'No delivery data available.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
+          )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-3">{language === 'bn' ? 'পণ্যের নাম ও কোম্পানি' : 'Product Name & Brand'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'বিক্রিত ইউনিট' : 'Units Sold'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'মোট বিক্রয় মূল্য (TK)' : 'Total Sales Price (TP)'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {salesReportData.productSales.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-850">
-                        <div>{row.productName}</div>
-                        <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.sku} · {row.company}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.unitsSold.toLocaleString()} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">{row.returns} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">{row.damages} Pcs</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.revenue)}</td>
+          {salesSubTab === 'product' && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-slate-800 text-sm">
+                  {language === 'bn' ? 'পণ্যভিত্তিক বিক্রয় বিবরণী' : 'Product-wise Sales Breakdown'}
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
+                      <th className="px-4 py-3">{language === 'bn' ? 'পণ্যের নাম ও কোম্পানি' : 'Product Name & Brand'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'বিক্রিত ইউনিট' : 'Units Sold'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
+                      <th className="px-4 py-3 text-right text-indigo-600">{language === 'bn' ? 'মোট বিক্রয় (DP)' : 'Total Sales (DP)'}</th>
+                      <th className="px-4 py-3 text-right text-emerald-600">{language === 'bn' ? 'মোট বিক্রয় (TP)' : 'Total Sales (TP)'}</th>
                     </tr>
-                  ))}
-                  {salesReportData.productSales.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400 font-semibold">
-                        {language === 'bn' ? 'কোনো পণ্য বিক্রির ডেটা পাওয়া যায়নি।' : 'No product sales data available.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {salesReportData.productSales.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="px-4 py-3.5 font-bold text-slate-850">
+                          <div>{row.productName}</div>
+                          <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.sku} · {row.company}</div>
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">
+                          <UnitDisplay qty={row.unitsSold} units={units} uomId={row.uomId} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">
+                          <UnitDisplay qty={row.returns} units={units} uomId={row.uomId} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">
+                          <UnitDisplay qty={row.damages} units={units} uomId={row.uomId} />
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-indigo-700">{formatBDT(row.dpTotal)}</td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-700">{formatBDT(row.revenue)}</td>
+                      </tr>
+                    ))}
+                    {salesReportData.productSales.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-slate-400 font-semibold">
+                          {language === 'bn' ? 'কোনো পণ্য বিক্রির ডেটা পাওয়া যায়নি।' : 'No product sales data available.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
+
+          {salesSubTab === 'unit' && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-slate-800 text-sm">
+                  {language === 'bn' ? 'ইউনিটভিত্তিক বিক্রয় বিবরণী' : 'Unit-wise Sales Breakdown'}
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
+                      <th className="px-4 py-3">{language === 'bn' ? 'ইউনিটের নাম' : 'Unit Name'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'বিক্রিত ইউনিট' : 'Units Sold (Pieces)'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty (Pieces)'}</th>
+                      <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty (Pieces)'}</th>
+                      <th className="px-4 py-3 text-right text-indigo-600">{language === 'bn' ? 'মোট বিক্রয় (DP)' : 'Total Sales (DP)'}</th>
+                      <th className="px-4 py-3 text-right text-emerald-600">{language === 'bn' ? 'মোট বিক্রয় (TP)' : 'Total Sales (TP)'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {salesReportData.unitSales.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="px-4 py-3.5 font-bold text-slate-850">
+                          <div>{row.unitName}</div>
+                          {row.unitSymbol !== row.unitName && (
+                            <div className="text-[9px] text-slate-400 font-mono mt-0.5">Symbol: {row.unitSymbol}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">
+                          <UnitDisplay qty={row.unitsSold} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">
+                          <UnitDisplay qty={row.returns} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">
+                          <UnitDisplay qty={row.damages} units={units} />
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-indigo-700">{formatBDT(row.dpTotal)}</td>
+                        <td className="px-4 py-3.5 text-right font-mono font-bold text-emerald-700">{formatBDT(row.revenue)}</td>
+                      </tr>
+                    ))}
+                    {salesReportData.unitSales.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-slate-400 font-semibold">
+                          {language === 'bn' ? 'কোনো ইউনিট বিক্রির ডেটা পাওয়া যায়নি।' : 'No unit sales data available.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1462,95 +1698,7 @@ export default function ReportsModule({
             })}
           </div>
 
-          {/* Delivery Man-wise Sales Breakdown */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm">
-                {language === 'bn' ? 'ডেলিভারি ম্যানভিত্তিক বিক্রয় বিবরণী' : 'Delivery Man-wise Sales Breakdown'}
-              </h3>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-3">{language === 'bn' ? 'ডেলিভারি ম্যান' : 'Delivery Officer / Man'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'মোট চালান' : 'Total Challans'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ডেলিভারি ইউনিট' : 'Delivered Units'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'মোট ডেলিভারি মূল্য (TK)' : 'Total Delivered (Tk)'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {salesReportData.dmSales.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-850">
-                        <div>{row.dmName}</div>
-                        <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.vehicle}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-600">{row.totalChallans}</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.unitsSold.toLocaleString()} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">{row.returns} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">{row.damages} Pcs</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.revenue)}</td>
-                    </tr>
-                  ))}
-                  {salesReportData.dmSales.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400 font-semibold">
-                        {language === 'bn' ? 'কোনো ডেলিভারি ডেটা পাওয়া যায়নি।' : 'No delivery data available.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Product-wise Sales Breakdown */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm">
-                {language === 'bn' ? 'পণ্যভিত্তিক বিক্রয় বিবরণী' : 'Product-wise Sales Breakdown'}
-              </h3>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-3">{language === 'bn' ? 'পণ্যের নাম ও কোম্পানি' : 'Product Name & Brand'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'বিক্রিত ইউনিট' : 'Units Sold'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'মোট বিক্রয় মূল্য (TK)' : 'Total Sales Price (TP)'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {salesReportData.productSales.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-850">
-                        <div>{row.productName}</div>
-                        <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.sku} · {row.company}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.unitsSold.toLocaleString()} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">{row.returns} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">{row.damages} Pcs</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.revenue)}</td>
-                    </tr>
-                  ))}
-                  {salesReportData.productSales.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400 font-semibold">
-                        {language === 'bn' ? 'কোনো পণ্য বিক্রির ডেটা পাওয়া যায়নি।' : 'No product sales data available.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       )}
 
@@ -1605,95 +1753,7 @@ export default function ReportsModule({
             </table>
           </div>
 
-          {/* Delivery Man-wise Sales Breakdown */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm">
-                {language === 'bn' ? 'ডেলিভারি ম্যানভিত্তিক বিক্রয় বিবরণী' : 'Delivery Man-wise Sales Breakdown'}
-              </h3>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-3">{language === 'bn' ? 'ডেলিভারি ম্যান' : 'Delivery Officer / Man'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'মোট চালান' : 'Total Challans'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ডেলিভারি ইউনিট' : 'Delivered Units'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'মোট ডেলিভারি মূল্য (TK)' : 'Total Delivered (Tk)'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {salesReportData.dmSales.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-850">
-                        <div>{row.dmName}</div>
-                        <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.vehicle}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-600">{row.totalChallans}</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.unitsSold.toLocaleString()} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">{row.returns} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">{row.damages} Pcs</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.revenue)}</td>
-                    </tr>
-                  ))}
-                  {salesReportData.dmSales.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400 font-semibold">
-                        {language === 'bn' ? 'কোনো ডেলিভারি ডেটা পাওয়া যায়নি।' : 'No delivery data available.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Product-wise Sales Breakdown */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <div className="border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 text-sm">
-                {language === 'bn' ? 'পণ্যভিত্তিক বিক্রয় বিবরণী' : 'Product-wise Sales Breakdown'}
-              </h3>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[10px] font-bold text-slate-450 uppercase tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-3">{language === 'bn' ? 'পণ্যের নাম ও কোম্পানি' : 'Product Name & Brand'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'বিক্রিত ইউনিট' : 'Units Sold'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ফেরত পরিমাণ' : 'Return Qty'}</th>
-                    <th className="px-4 py-3 text-center">{language === 'bn' ? 'ক্ষতিগ্রস্ত পরিমাণ' : 'Damage Qty'}</th>
-                    <th className="px-4 py-3 text-right">{language === 'bn' ? 'মোট বিক্রয় মূল্য (TK)' : 'Total Sales Price (TP)'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {salesReportData.productSales.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-850">
-                        <div>{row.productName}</div>
-                        <div className="text-[9px] text-slate-400 font-mono mt-0.5">{row.sku} · {row.company}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-slate-700">{row.unitsSold.toLocaleString()} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-amber-600">{row.returns} Pcs</td>
-                      <td className="px-4 py-3.5 text-center font-mono font-bold text-rose-600">{row.damages} Pcs</td>
-                      <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-900">{formatBDT(row.revenue)}</td>
-                    </tr>
-                  ))}
-                  {salesReportData.productSales.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400 font-semibold">
-                        {language === 'bn' ? 'কোনো পণ্য বিক্রির ডেটা পাওয়া যায়নি।' : 'No product sales data available.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       )}
 

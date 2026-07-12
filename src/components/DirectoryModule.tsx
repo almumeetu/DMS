@@ -397,8 +397,8 @@ function GodownRow({ g, index, onEdit, onDelete }: GodownRowProps) {
       <td className="px-4 py-3.5 text-slate-550">{g.location || 'N/A'}</td>
       <td className="px-4 py-3.5 text-center">
         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${g.isDamageGodown
-            ? 'bg-rose-50 text-rose-700 border-rose-200'
-            : 'bg-emerald-50 text-emerald-705 border-emerald-200'
+          ? 'bg-rose-50 text-rose-700 border-rose-200'
+          : 'bg-emerald-50 text-emerald-705 border-emerald-200'
           }`}>
           {g.isDamageGodown ? 'Damage/Return godown' : 'Salable godown'}
         </span>
@@ -505,22 +505,20 @@ export default function DirectoryModule({
       <button
         type="button"
         onClick={() => setViewMode('grid')}
-        className={`p-1.5 rounded-md flex items-center justify-center transition-all ${
-          viewMode === 'grid'
-            ? 'bg-white shadow-sm text-indigo-600 border border-slate-200'
-            : 'text-slate-400 hover:text-slate-600'
-        }`}
+        className={`p-1.5 rounded-md flex items-center justify-center transition-all ${viewMode === 'grid'
+          ? 'bg-white shadow-sm text-indigo-600 border border-slate-200'
+          : 'text-slate-400 hover:text-slate-600'
+          }`}
       >
         <LayoutGrid className="w-4 h-4" />
       </button>
       <button
         type="button"
         onClick={() => setViewMode('list')}
-        className={`p-1.5 rounded-md flex items-center justify-center transition-all ${
-          viewMode === 'list'
-            ? 'bg-white shadow-sm text-indigo-600 border border-slate-200'
-            : 'text-slate-400 hover:text-slate-600'
-        }`}
+        className={`p-1.5 rounded-md flex items-center justify-center transition-all ${viewMode === 'list'
+          ? 'bg-white shadow-sm text-indigo-600 border border-slate-200'
+          : 'text-slate-400 hover:text-slate-600'
+          }`}
       >
         <List className="w-4 h-4" />
       </button>
@@ -634,7 +632,10 @@ export default function DirectoryModule({
 
   // Form Fields: Unit
   const [unitName, setUnitName] = useState('');
+  const [unitSymbol, setUnitSymbol] = useState('');
   const [unitMultiplier, setUnitMultiplier] = useState<number>(1);
+  const [unitParentId, setUnitParentId] = useState<string>('');
+  const [unitDescription, setUnitDescription] = useState('');
 
   // Form Fields: Godown
   const [godownName, setGodownName] = useState('');
@@ -694,7 +695,7 @@ export default function DirectoryModule({
 
   const saveInlineEditProduct = useCallback(() => {
     if (inlineEditingProductId && inlineEditForm.name && inlineEditForm.sku && inlineEditForm.company) {
-      setProducts(prev => prev.map(p => 
+      setProducts(prev => prev.map(p =>
         p.id === inlineEditingProductId ? { ...p, ...inlineEditForm } as Product : p
       ));
       setInlineEditingProductId(null);
@@ -907,14 +908,23 @@ export default function DirectoryModule({
       return;
     }
 
+    const unitData = {
+      id: editingUnit ? editingUnit.id : `uom-${Date.now()}`,
+      name: unitName,
+      symbol: unitSymbol || undefined,
+      multiplier: Number(unitMultiplier),
+      parentUnitId: unitParentId || undefined,
+      description: unitDescription || undefined
+    };
+
     if (editingUnit) {
-      setUnits(prev => prev.map(u => u.id === editingUnit.id ? { ...u, name: unitName, multiplier: Number(unitMultiplier) } : u));
+      setUnits(prev => prev.map(u => u.id === editingUnit.id ? { ...u, ...unitData } : u));
       setEditingUnit(null);
     } else {
-      setUnits(prev => [...prev, { id: `uom-${Date.now()}`, name: unitName, multiplier: Number(unitMultiplier) }]);
+      setUnits(prev => [...prev, unitData]);
     }
     setShowUnitModal(false);
-  }, [unitName, unitMultiplier, editingUnit, setUnits]);
+  }, [unitName, unitSymbol, unitMultiplier, unitParentId, unitDescription, editingUnit, setUnits]);
 
   // --- SUBMIT: Godown ---
   const handleGodownSubmit = useCallback((e: React.FormEvent) => {
@@ -1011,7 +1021,10 @@ export default function DirectoryModule({
   const handleOpenUnit = useCallback(() => {
     setEditingUnit(null);
     setUnitName('');
+    setUnitSymbol('');
     setUnitMultiplier(1);
+    setUnitParentId('');
+    setUnitDescription('');
     setShowUnitModal(true);
   }, []);
 
@@ -1080,7 +1093,10 @@ export default function DirectoryModule({
   const startEditUnit = useCallback((u: UnitOfMeasure) => {
     setEditingUnit(u);
     setUnitName(u.name);
+    setUnitSymbol(u.symbol || '');
     setUnitMultiplier(u.multiplier);
+    setUnitParentId(u.parentUnitId || '');
+    setUnitDescription(u.description || '');
     setShowUnitModal(true);
   }, []);
 
@@ -1193,8 +1209,8 @@ export default function DirectoryModule({
                   type="button"
                   onClick={() => setActiveSubTab(tab.id as DirectoryTab)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${isActive
-                      ? 'bg-white text-slate-950 shadow-md font-bold'
-                      : 'text-slate-300 hover:text-white hover:bg-white/5'
+                    ? 'bg-white text-slate-950 shadow-md font-bold'
+                    : 'text-slate-300 hover:text-white hover:bg-white/5'
                     }`}
                 >
                   <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-slate-900' : 'text-slate-400'}`} />
@@ -1263,11 +1279,10 @@ export default function DirectoryModule({
                   setProductStockFilter(productStockFilter === 'Low' ? 'All' : 'Low');
                   setViewMode('list');
                 }}
-                className={`bg-gradient-to-br from-amber-50/70 to-orange-50/20 rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group hover:shadow-md transition-all duration-300 text-left w-full cursor-pointer ${
-                  productStockFilter === 'Low' 
-                    ? 'border-2 border-amber-500 ring-4 ring-amber-100 bg-amber-50/40' 
-                    : 'border border-amber-100'
-                }`}
+                className={`bg-gradient-to-br from-amber-50/70 to-orange-50/20 rounded-2xl p-5 shadow-sm flex items-center gap-4 relative overflow-hidden group hover:shadow-md transition-all duration-300 text-left w-full cursor-pointer ${productStockFilter === 'Low'
+                  ? 'border-2 border-amber-500 ring-4 ring-amber-100 bg-amber-50/40'
+                  : 'border border-amber-100'
+                  }`}
               >
                 <div className="absolute right-0 bottom-0 w-24 h-24 bg-amber-500/5 rounded-tl-full pointer-events-none" />
                 <div className="p-3 bg-amber-500 rounded-xl text-white shadow-sm shadow-amber-200">
@@ -1314,7 +1329,7 @@ export default function DirectoryModule({
                   </button>
                 )}
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                 {/* Search query */}
                 <div className="space-y-1.5">
@@ -1425,181 +1440,238 @@ export default function DirectoryModule({
             {/* Product View */}
             {viewMode === 'grid' ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredProducts.map(p => {
-                const uomObj = units.find(u => u.id === p.uomId);
-                const uomName = uomObj?.name || 'N/A';
-                const multiplier = uomObj?.multiplier || 1;
-                const godownName = godowns.find(g => g.id === p.defaultGodownId)?.name || 'Main Godown';
-                const marginPct = p.defaultWSP > 0 ? ((p.defaultWSP - p.defaultPP) / p.defaultWSP) * 100 : 0;
+                {filteredProducts.map(p => {
+                  const uomObj = units.find(u => u.id === p.uomId);
+                  const uomName = uomObj?.name || 'N/A';
+                  const multiplier = uomObj?.multiplier || 1;
+                  const godownName = godowns.find(g => g.id === p.defaultGodownId)?.name || 'Main Godown';
+                  const marginPct = p.defaultWSP > 0 ? ((p.defaultWSP - p.defaultPP) / p.defaultWSP) * 100 : 0;
 
-                const isLowStock = p.currentStock < 600;
+                  const isLowStock = p.currentStock < 600;
 
-                let brandTheme = {
-                  border: "hover:border-purple-300",
-                  bgGradient: "from-purple-50/30 via-white to-white border-slate-200",
-                  badge: "bg-purple-50 text-purple-700 border-purple-200",
-                  valText: "text-purple-700",
-                  valBg: "bg-purple-50/40 border-purple-100",
-                  shadow: "shadow-purple-100/50"
-                };
-
-                const compLower = p.company.toLowerCase();
-                if (compLower === 'pran') {
-                  brandTheme = {
-                    border: "hover:border-orange-300",
-                    bgGradient: "from-orange-50/30 via-white to-white border-slate-200",
-                    badge: "bg-orange-50 text-orange-700 border-orange-200",
-                    valText: "text-orange-700",
-                    valBg: "bg-orange-50/40 border-orange-100",
-                    shadow: "shadow-orange-100/50"
+                  let brandTheme = {
+                    border: "hover:border-purple-300",
+                    bgGradient: "from-purple-50/30 via-white to-white border-slate-200",
+                    badge: "bg-purple-50 text-purple-700 border-purple-200",
+                    valText: "text-purple-700",
+                    valBg: "bg-purple-50/40 border-purple-100",
+                    shadow: "shadow-purple-100/50"
                   };
-                } else if (compLower === 'olympic') {
-                  brandTheme = {
-                    border: "hover:border-blue-300",
-                    bgGradient: "from-blue-50/30 via-white to-white border-slate-200",
-                    badge: "bg-blue-50 text-blue-700 border-blue-200",
-                    valText: "text-blue-700",
-                    valBg: "bg-blue-50/40 border-blue-100",
-                    shadow: "shadow-blue-100/50"
-                  };
-                } else if (compLower === 'haque') {
-                  brandTheme = {
-                    border: "hover:border-emerald-300",
-                    bgGradient: "from-emerald-50/30 via-white to-white border-slate-200",
-                    badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
-                    valText: "text-emerald-700",
-                    valBg: "bg-emerald-50/40 border-emerald-100",
-                    shadow: "shadow-emerald-100/50"
-                  };
-                } else if (compLower === 'coca-cola' || compLower === 'coca cola') {
-                  brandTheme = {
-                    border: "hover:border-red-300",
-                    bgGradient: "from-red-50/30 via-white to-white border-slate-200",
-                    badge: "bg-red-50 text-red-700 border-red-200",
-                    valText: "text-red-700",
-                    valBg: "bg-red-50/40 border-red-100",
-                    shadow: "shadow-red-100/50"
-                  };
-                }
 
-                return (
-                  <div
-                    key={p.id}
-                    className={`bg-gradient-to-br ${brandTheme.bgGradient} rounded-3xl border p-5 shadow-sm hover:shadow-md ${brandTheme.border} transition-all duration-300 flex flex-col justify-between space-y-4 group relative overflow-hidden`}
-                  >
-                    <div className="absolute -right-20 -top-20 w-36 h-36 rounded-full bg-slate-50 group-hover:bg-blue-500/5 transition-all duration-500 pointer-events-none" />
+                  const compLower = p.company.toLowerCase();
+                  if (compLower === 'pran') {
+                    brandTheme = {
+                      border: "hover:border-orange-300",
+                      bgGradient: "from-orange-50/30 via-white to-white border-slate-200",
+                      badge: "bg-orange-50 text-orange-700 border-orange-200",
+                      valText: "text-orange-700",
+                      valBg: "bg-orange-50/40 border-orange-100",
+                      shadow: "shadow-orange-100/50"
+                    };
+                  } else if (compLower === 'olympic') {
+                    brandTheme = {
+                      border: "hover:border-blue-300",
+                      bgGradient: "from-blue-50/30 via-white to-white border-slate-200",
+                      badge: "bg-blue-50 text-blue-700 border-blue-200",
+                      valText: "text-blue-700",
+                      valBg: "bg-blue-50/40 border-blue-100",
+                      shadow: "shadow-blue-100/50"
+                    };
+                  } else if (compLower === 'haque') {
+                    brandTheme = {
+                      border: "hover:border-emerald-300",
+                      bgGradient: "from-emerald-50/30 via-white to-white border-slate-200",
+                      badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                      valText: "text-emerald-700",
+                      valBg: "bg-emerald-50/40 border-emerald-100",
+                      shadow: "shadow-emerald-100/50"
+                    };
+                  } else if (compLower === 'coca-cola' || compLower === 'coca cola') {
+                    brandTheme = {
+                      border: "hover:border-red-300",
+                      bgGradient: "from-red-50/30 via-white to-white border-slate-200",
+                      badge: "bg-red-50 text-red-700 border-red-200",
+                      valText: "text-red-700",
+                      valBg: "bg-red-50/40 border-red-100",
+                      shadow: "shadow-red-100/50"
+                    };
+                  }
 
-                    <div className="space-y-2.5 relative z-10">
-                      <div className="flex items-center justify-between">
-                        <span 
-                          title={p.company}
-                          className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider max-w-[120px] truncate align-middle border ${getCompanyBadgeStyle(p.company)}`}
-                        >
-                          {p.company}
-                        </span>
-                        <span className="font-mono text-[9px] font-bold text-slate-400 uppercase tracking-wide">
-                          {p.sku}
-                        </span>
-                      </div>
+                  return (
+                    <div
+                      key={p.id}
+                      className={`bg-gradient-to-br ${brandTheme.bgGradient} rounded-3xl border p-5 shadow-sm hover:shadow-md ${brandTheme.border} transition-all duration-300 flex flex-col justify-between space-y-4 group relative overflow-hidden`}
+                    >
+                      <div className="absolute -right-20 -top-20 w-36 h-36 rounded-full bg-slate-50 group-hover:bg-blue-500/5 transition-all duration-500 pointer-events-none" />
 
-                      <h4 className="font-bold text-slate-800 text-sm sm:text-base group-hover:text-slate-900 transition-colors line-clamp-1 leading-snug">
-                        {p.name}
-                      </h4>
-
-                      <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-bold uppercase tracking-wide">
-                        {uomName !== 'N/A' && (
-                          <span className="bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded">UOM: {uomName}</span>
-                        )}
-                        {godownName !== 'Main Godown' && godownName !== 'N/A' && (
-                          <span className="bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded">{godownName}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Stock Meter */}
-                    <div className="space-y-1.5 relative z-10 pt-1">
-                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
-                        <span>{language === 'bn' ? 'স্টক লেভেল' : 'Stock Level'}</span>
-                        <div className="text-right">
-                          <span className={isLowStock ? "text-amber-600 animate-pulse font-extrabold" : "text-slate-700"}>
-                            {p.currentStock.toLocaleString()} {language === 'bn' ? 'টি' : 'Units'}
+                      <div className="space-y-2.5 relative z-10">
+                        <div className="flex items-center justify-between">
+                          <span
+                            title={p.company}
+                            className={`inline-block px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider max-w-[120px] truncate align-middle border ${getCompanyBadgeStyle(p.company)}`}
+                          >
+                            {p.company}
                           </span>
-                          <span className={`text-[10px] ${brandTheme.valText} ${brandTheme.valBg} border px-2 py-0.5 rounded font-mono block mt-0.5 font-bold`}>
-                            Val: ৳{(p.currentStock * p.defaultPP).toLocaleString('en-BD')}
+                          <span className="font-mono text-[9px] font-bold text-slate-400 uppercase tracking-wide">
+                            {p.sku}
                           </span>
                         </div>
-                      </div>
-                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          style={{ width: `${Math.min(100, (p.currentStock / 5000) * 100)}%` }}
-                          className={`h-full rounded-full transition-all duration-500 ${isLowStock ? 'bg-amber-500' : 'bg-emerald-500'
-                            }`}
-                        />
-                      </div>
-                    </div>
 
-                    {/* Prices Grid */}
-                    <div className="grid grid-cols-3 gap-2 relative z-10 pt-1 text-center">
-                      <div className="bg-blue-50/40 rounded-xl p-2 border border-blue-100 flex flex-col justify-between">
-                        <div>
-                          <span className="text-[8px] text-blue-500 font-extrabold uppercase tracking-wider block">{language === 'bn' ? 'DP' : 'Dealer Price (DP)'}</span>
-                          <span className="font-mono text-xs font-black text-blue-700">{formatBDT(p.defaultPP)}</span>
-                        </div>
-                        {multiplier > 1 && (
-                          <span className="text-[9px] text-slate-500 font-semibold block border-t border-blue-100/50 mt-1 pt-0.5">{getPerPiecePrice(p.defaultPP, multiplier)}/{language === 'bn' ? 'পিস' : 'pc'}</span>
-                        )}
-                      </div>
-                      <div className="bg-emerald-50/40 rounded-xl p-2 border border-emerald-100 flex flex-col justify-between">
-                        <div>
-                          <span className="text-[8px] text-emerald-600 font-extrabold uppercase tracking-wider block">{language === 'bn' ? 'TP' : 'Trade Price (TP)'}</span>
-                          <span className="font-mono text-xs font-black text-emerald-800">{formatBDT(p.defaultWSP)}</span>
-                        </div>
-                        {multiplier > 1 && (
-                          <span className="text-[9px] text-indigo-500 font-bold block border-t border-emerald-100/50 mt-1 pt-0.5">{getPerPiecePrice(p.defaultWSP, multiplier)}/{language === 'bn' ? 'পিস' : 'pc'}</span>
-                        )}
-                      </div>
-                      <div className="bg-amber-50/40 rounded-xl p-2 border border-amber-100 flex flex-col justify-between">
-                        <div>
-                          <span className="text-[8px] text-amber-600 font-extrabold uppercase tracking-wider block">{language === 'bn' ? 'MRP' : 'MRP'}</span>
-                          <span className="font-mono text-xs font-black text-amber-700">{formatBDT(p.defaultMRP)}</span>
-                        </div>
-                        {multiplier > 1 && (
-                          <span className="text-[9px] text-slate-700 font-extrabold block border-t border-amber-100/50 mt-1 pt-0.5">{getPerPiecePrice(p.defaultMRP, multiplier)}/{language === 'bn' ? 'পিস' : 'pc'}</span>
-                        )}
-                      </div>
-                    </div>
+                        <h4 className="font-bold text-slate-800 text-sm sm:text-base group-hover:text-slate-900 transition-colors line-clamp-1 leading-snug">
+                          {p.name}
+                        </h4>
 
-                    {/* Margin Info & Actions */}
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between relative z-10">
-                      <div className="space-y-0.5">
-                        <span className="text-[9px] text-slate-400 uppercase font-bold block">{language === 'bn' ? 'পাইকারি মার্জিন' : 'Wholesale Margin'}</span>
-                        <span className="font-mono text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
-                          +{marginPct.toFixed(1)}%
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-bold uppercase tracking-wide">
+                          {uomName !== 'N/A' && (
+                            <span className="bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded">UOM: {uomName}</span>
+                          )}
+                          {godownName !== 'Main Godown' && godownName !== 'N/A' && (
+                            <span className="bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded">{godownName}</span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => startEditProduct(p)}
-                          className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-slate-200"
-                          title="Edit product"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteProduct(p.id)}
-                          className="p-2 text-rose-500 hover:text-rose-900 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-rose-100"
-                          title="Delete product"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      {/* Stock Meter */}
+                      <div className="space-y-1.5 relative z-10 pt-1">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                          <span>{language === 'bn' ? 'স্টক লেভেল' : 'Stock Level'}</span>
+                          <div className="text-right">
+                            <div className={isLowStock ? "text-amber-600 animate-pulse font-extrabold" : "text-slate-700"}>
+                              {(() => {
+                                const uomObj = units.find(u => u.id === p.uomId);
+                                if (uomObj) {
+                                  const qty = p.currentStock / uomObj.multiplier;
+                                  const displayQty = qty % 1 === 0 ? qty.toLocaleString() : qty.toFixed(1);
+                                  return (
+                                    <div className="space-y-0.5">
+                                      <div className="text-xs">
+                                        {displayQty} {uomObj.symbol || uomObj.name}
+                                      </div>
+                                      <div className="text-[9px] text-slate-400">
+                                        ({p.currentStock.toLocaleString()} Pieces)
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div className="text-xs">
+                                    {p.currentStock.toLocaleString()} Pieces
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                            <span className={`text-[10px] ${brandTheme.valText} ${brandTheme.valBg} border px-2 py-0.5 rounded font-mono block mt-1 font-bold`}>
+                              Val: ৳{(p.currentStock * p.defaultPP).toLocaleString('en-BD')}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            style={{ width: `${Math.min(100, (p.currentStock / 5000) * 100)}%` }}
+                            className={`h-full rounded-full transition-all duration-500 ${isLowStock ? 'bg-amber-500' : 'bg-emerald-500'
+                              }`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Prices Grid */}
+                      <div className="grid grid-cols-3 gap-2 relative z-10 pt-1 text-center">
+                        <div className="bg-blue-50/40 rounded-xl p-2 border border-blue-100 flex flex-col justify-between">
+                          <div>
+                            <span className="text-[8px] text-blue-500 font-extrabold uppercase tracking-wider block">{language === 'bn' ? 'DP' : 'Dealer Price (DP)'}</span>
+                            {(() => {
+                              const uomObj = units.find(u => u.id === p.uomId);
+                              if (uomObj && uomObj.multiplier > 1) {
+                                const unitPrice = p.defaultPP * uomObj.multiplier;
+                                return (
+                                  <div className="space-y-0.5">
+                                    <span className="font-mono text-sm font-black text-blue-700">{formatBDT(unitPrice)}</span>
+                                    <span className="text-[9px] text-blue-400 font-semibold block">/ {uomObj.symbol || uomObj.name}</span>
+                                    <span className="text-[9px] text-slate-500 font-semibold block border-t border-blue-100/50 mt-1 pt-0.5">{formatBDT(p.defaultPP)}/pc</span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <span className="font-mono text-xs font-black text-blue-700">{formatBDT(p.defaultPP)}</span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                        <div className="bg-emerald-50/40 rounded-xl p-2 border border-emerald-100 flex flex-col justify-between">
+                          <div>
+                            <span className="text-[8px] text-emerald-600 font-extrabold uppercase tracking-wider block">{language === 'bn' ? 'TP' : 'Trade Price (TP)'}</span>
+                            {(() => {
+                              const uomObj = units.find(u => u.id === p.uomId);
+                              if (uomObj && uomObj.multiplier > 1) {
+                                const unitPrice = p.defaultWSP * uomObj.multiplier;
+                                return (
+                                  <div className="space-y-0.5">
+                                    <span className="font-mono text-sm font-black text-emerald-700">{formatBDT(unitPrice)}</span>
+                                    <span className="text-[9px] text-emerald-400 font-semibold block">/ {uomObj.symbol || uomObj.name}</span>
+                                    <span className="text-[9px] text-indigo-500 font-bold block border-t border-emerald-100/50 mt-1 pt-0.5">{formatBDT(p.defaultWSP)}/pc</span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <span className="font-mono text-xs font-black text-emerald-800">{formatBDT(p.defaultWSP)}</span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                        <div className="bg-amber-50/40 rounded-xl p-2 border border-amber-100 flex flex-col justify-between">
+                          <div>
+                            <span className="text-[8px] text-amber-600 font-extrabold uppercase tracking-wider block">{language === 'bn' ? 'MRP' : 'MRP'}</span>
+                            {(() => {
+                              const uomObj = units.find(u => u.id === p.uomId);
+                              if (uomObj && uomObj.multiplier > 1) {
+                                const unitPrice = p.defaultMRP * uomObj.multiplier;
+                                return (
+                                  <div className="space-y-0.5">
+                                    <span className="font-mono text-sm font-black text-amber-700">{formatBDT(unitPrice)}</span>
+                                    <span className="text-[9px] text-amber-400 font-semibold block">/ {uomObj.symbol || uomObj.name}</span>
+                                    <span className="text-[9px] text-slate-700 font-extrabold block border-t border-amber-100/50 mt-1 pt-0.5">{formatBDT(p.defaultMRP)}/pc</span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <span className="font-mono text-xs font-black text-amber-700">{formatBDT(p.defaultMRP)}</span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Margin Info & Actions */}
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between relative z-10">
+                        <div className="space-y-0.5">
+                          <span className="text-[9px] text-slate-400 uppercase font-bold block">{language === 'bn' ? 'পাইকারি মার্জিন' : 'Wholesale Margin'}</span>
+                          <span className="font-mono text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
+                            +{marginPct.toFixed(1)}%
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => startEditProduct(p)}
+                            className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-slate-200"
+                            title="Edit product"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProduct(p.id)}
+                            className="p-2 text-rose-500 hover:text-rose-900 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-rose-100"
+                            title="Delete product"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
               </div>
             ) : (
               <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -1721,7 +1793,7 @@ export default function DirectoryModule({
                               <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">{p.sku}</div>
                             </td>
                             <td className="px-5 py-3.5">
-                              <span 
+                              <span
                                 title={p.company}
                                 className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider max-w-[120px] truncate align-middle border shadow-sm ${getCompanyBadgeStyle(p.company)}`}
                               >
@@ -1734,38 +1806,72 @@ export default function DirectoryModule({
                               </span>
                             </td>
                             <td className="px-5 py-3.5 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${
-                                isLowStock 
-                                  ? "bg-rose-50 text-rose-600 border-rose-100" 
-                                  : "bg-emerald-50 text-emerald-700 border-emerald-100"
-                              }`}>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${isLowStock
+                                ? "bg-rose-50 text-rose-600 border-rose-100"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                }`}>
                                 <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${isLowStock ? "bg-rose-500 animate-pulse" : "bg-emerald-500"}`} />
-                                {p.currentStock.toLocaleString()} {language === 'bn' ? 'টি' : 'Units'}
+                                {(() => {
+                                  const uomObj = units.find(u => u.id === p.uomId);
+                                  if (uomObj) {
+                                    const qty = p.currentStock / uomObj.multiplier;
+                                    const displayQty = qty % 1 === 0 ? qty.toLocaleString() : qty.toFixed(1);
+                                    return `${displayQty} ${uomObj.symbol || uomObj.name}`;
+                                  }
+                                  return `${p.currentStock.toLocaleString()} ${language === 'bn' ? 'টি' : 'Units'}`;
+                                })()}
                               </span>
                             </td>
                             <td className="px-5 py-3.5 text-xs text-slate-500 font-medium whitespace-nowrap">
-                              <div>{formatBDT(p.defaultPP)}</div>
-                              {multiplier > 1 && (
-                                <div className="text-[9px] text-slate-400 font-semibold mt-0.5">
-                                  {getPerPiecePrice(p.defaultPP, multiplier)}/{language === 'bn' ? 'পিস' : 'pc'}
-                                </div>
-                              )}
+                              {(() => {
+                                const uomObj = units.find(u => u.id === p.uomId);
+                                if (uomObj && uomObj.multiplier > 1) {
+                                  const unitPrice = p.defaultPP * uomObj.multiplier;
+                                  return (
+                                    <div className="space-y-0.5">
+                                      <div className="font-bold text-blue-700">{formatBDT(unitPrice)}</div>
+                                      <div className="text-[9px] text-slate-400 font-semibold">
+                                        / {uomObj.symbol || uomObj.name} · {formatBDT(p.defaultPP)}/pc
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return <div>{formatBDT(p.defaultPP)}</div>;
+                              })()}
                             </td>
                             <td className="px-5 py-3.5 text-xs text-indigo-600 font-bold whitespace-nowrap">
-                              <div>{formatBDT(p.defaultWSP)}</div>
-                              {multiplier > 1 && (
-                                <div className="text-[9px] text-indigo-400 font-bold mt-0.5">
-                                  {getPerPiecePrice(p.defaultWSP, multiplier)}/{language === 'bn' ? 'পিস' : 'pc'}
-                                </div>
-                              )}
+                              {(() => {
+                                const uomObj = units.find(u => u.id === p.uomId);
+                                if (uomObj && uomObj.multiplier > 1) {
+                                  const unitPrice = p.defaultWSP * uomObj.multiplier;
+                                  return (
+                                    <div className="space-y-0.5">
+                                      <div className="font-bold text-emerald-700">{formatBDT(unitPrice)}</div>
+                                      <div className="text-[9px] text-indigo-400 font-semibold">
+                                        / {uomObj.symbol || uomObj.name} · {formatBDT(p.defaultWSP)}/pc
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return <div>{formatBDT(p.defaultWSP)}</div>;
+                              })()}
                             </td>
                             <td className="px-5 py-3.5 text-xs text-slate-900 font-extrabold whitespace-nowrap">
-                              <div>{formatBDT(p.defaultMRP)}</div>
-                              {multiplier > 1 && (
-                                <div className="text-[9px] text-slate-500 font-bold mt-0.5">
-                                  {getPerPiecePrice(p.defaultMRP, multiplier)}/{language === 'bn' ? 'পিস' : 'pc'}
-                                </div>
-                              )}
+                              {(() => {
+                                const uomObj = units.find(u => u.id === p.uomId);
+                                if (uomObj && uomObj.multiplier > 1) {
+                                  const unitPrice = p.defaultMRP * uomObj.multiplier;
+                                  return (
+                                    <div className="space-y-0.5">
+                                      <div className="font-extrabold text-amber-700">{formatBDT(unitPrice)}</div>
+                                      <div className="text-[9px] text-slate-500 font-bold">
+                                        / {uomObj.symbol || uomObj.name} · {formatBDT(p.defaultMRP)}/pc
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return <div>{formatBDT(p.defaultMRP)}</div>;
+                              })()}
                             </td>
                             <td className="px-5 py-3.5 text-right">
                               <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1835,14 +1941,14 @@ export default function DirectoryModule({
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {customers.map((c, index) => {
                   const routeName = routes.find(r => r.id === c.routeId)?.name || 'Unassigned Beat';
-                  
+
                   return (
-                    <div 
+                    <div
                       key={c.id}
                       className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-slate-800 transition-all duration-300 flex flex-col justify-between space-y-4 group relative overflow-hidden"
                     >
                       <div className="absolute -right-20 -top-20 w-36 h-36 rounded-full bg-slate-50 group-hover:bg-slate-100/50 transition-all duration-500 pointer-events-none" />
-                      
+
                       <div className="space-y-3 relative z-10">
                         <div className="flex items-center justify-between">
                           <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white text-xs shadow-sm">
@@ -1857,7 +1963,7 @@ export default function DirectoryModule({
                           <h4 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug group-hover:text-slate-950 transition-colors">
                             {c.name}
                           </h4>
-                          
+
                           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold">
                             <MapPin className="w-3.5 h-3.5 text-slate-400" />
                             <span>{c.market}</span>
@@ -2079,10 +2185,10 @@ export default function DirectoryModule({
         const damageFilteredProducts = products.filter(p => {
           const matchCompany = selectedDamageCompany === 'All' || p.company === selectedDamageCompany;
           const matchCategory = damageCategoryFilter === 'All' || p.categoryId === damageCategoryFilter;
-          
+
           const search = damageSearch.toLowerCase();
           const matchSearch = !search || p.name.toLowerCase().includes(search) || p.sku.toLowerCase().includes(search);
-          
+
           let matchStock = true;
           if (damageStockFilter === 'HasDamage') {
             matchStock = (p.damagedStock || 0) > 0;
@@ -2096,7 +2202,7 @@ export default function DirectoryModule({
             : (damageDates.length > 0
               ? damageDates.some(date => (!damageStartDate || date >= damageStartDate) && (!damageEndDate || date <= damageEndDate))
               : matchesDateRange(p.createdAt, damageStartDate, damageEndDate));
-          
+
           return matchCompany && matchCategory && matchSearch && matchStock && matchesDamageDate;
         });
 
@@ -2311,7 +2417,7 @@ export default function DirectoryModule({
 
                       <div className="space-y-3 relative z-10">
                         <div className="flex items-center justify-between">
-                          <span 
+                          <span
                             title={p.company}
                             className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider max-w-[120px] truncate align-middle border shadow-sm ${getCompanyBadgeStyle(p.company)}`}
                           >
@@ -2456,7 +2562,7 @@ export default function DirectoryModule({
                               </div>
                             </td>
                             <td className="px-5 py-3.5">
-                              <span 
+                              <span
                                 title={p.company}
                                 className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider max-w-[120px] truncate align-middle border shadow-sm ${getCompanyBadgeStyle(p.company)}`}
                               >
@@ -2468,11 +2574,10 @@ export default function DirectoryModule({
                               <div className="text-[9px] text-slate-400 font-mono mt-0.5">Val: {formatBDT(p.currentStock * p.defaultPP)}</div>
                             </td>
                             <td className="px-5 py-3.5 whitespace-nowrap">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${
-                                damagedQty > 0 
-                                  ? "bg-rose-50 text-rose-600 border-rose-100" 
-                                  : "bg-slate-50 text-slate-500 border-slate-200"
-                              }`}>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${damagedQty > 0
+                                ? "bg-rose-50 text-rose-600 border-rose-100"
+                                : "bg-slate-50 text-slate-500 border-slate-200"
+                                }`}>
                                 <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${damagedQty > 0 ? "bg-rose-500 animate-pulse" : "bg-slate-400"}`} />
                                 {damagedQty.toLocaleString()} Units
                               </span>
@@ -2481,13 +2586,12 @@ export default function DirectoryModule({
                               )}
                             </td>
                             <td className="px-5 py-3.5 whitespace-nowrap">
-                              <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold border ${
-                                itemDamageRatio > 10 
-                                  ? "bg-rose-50 text-rose-600 border-rose-100" 
-                                  : itemDamageRatio > 0 
-                                    ? "bg-amber-50 text-amber-600 border-amber-100" 
-                                    : "bg-slate-50 text-slate-500 border-slate-200"
-                              }`}>
+                              <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold border ${itemDamageRatio > 10
+                                ? "bg-rose-50 text-rose-600 border-rose-100"
+                                : itemDamageRatio > 0
+                                  ? "bg-amber-50 text-amber-600 border-amber-100"
+                                  : "bg-slate-50 text-slate-500 border-slate-200"
+                                }`}>
                                 {itemDamageRatio.toFixed(1)}%
                               </span>
                             </td>
@@ -2664,65 +2768,84 @@ export default function DirectoryModule({
             {/* Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredUnits.map((uom, index) => {
-              const colorGradients = [
-                'from-violet-500 to-indigo-600',
-                'from-amber-500 to-orange-600',
-                'from-emerald-500 to-teal-600',
-                'from-sky-500 to-blue-600'
-              ];
-              const gradient = colorGradients[index % colorGradients.length];
+                const colorGradients = [
+                  'from-violet-500 to-indigo-600',
+                  'from-amber-500 to-orange-600',
+                  'from-emerald-500 to-teal-600',
+                  'from-sky-500 to-blue-600'
+                ];
+                const gradient = colorGradients[index % colorGradients.length];
+                const baseUnit = units.find(u => !u.parentUnitId) || { name: 'Unit', multiplier: 1, symbol: '' };
+                const parentUnit = uom.parentUnitId ? units.find(u => u.id === uom.parentUnitId) : null;
+                
+                let formulaText = `1 ${uom.name} = ${uom.multiplier} ${baseUnit.name}`;
+                if (parentUnit) {
+                  const parentToBase = parentUnit.multiplier;
+                  const thisToParent = uom.multiplier / parentToBase;
+                  formulaText = `1 ${uom.name} = ${thisToParent} ${parentUnit.name} = ${uom.multiplier} ${baseUnit.name}`;
+                }
 
-              return (
-                <div
-                  key={uom.id}
-                  className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-slate-800 transition-all duration-300 flex flex-col justify-between space-y-4 group relative overflow-hidden"
-                >
-                  <div className="absolute -right-20 -top-20 w-36 h-36 rounded-full bg-slate-50 group-hover:bg-slate-100/50 transition-all duration-500 pointer-events-none" />
+                return (
+                  <div
+                    key={uom.id}
+                    className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-slate-800 transition-all duration-300 flex flex-col justify-between space-y-4 group relative overflow-hidden"
+                  >
+                    <div className="absolute -right-20 -top-20 w-36 h-36 rounded-full bg-slate-50 group-hover:bg-slate-100/50 transition-all duration-500 pointer-events-none" />
 
-                  <div className="space-y-3 relative z-10">
-                    <div className="flex items-center justify-between">
-                      <span className={`w-8 h-8 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center font-bold text-white text-xs shadow-sm`}>
-                        {uom.name[0].toUpperCase()}
-                      </span>
-                      <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold">
-                        {language === 'bn' ? `১ ${uom.name} = ${uom.multiplier} টি` : `Multiplier: x${uom.multiplier}`}
-                      </span>
+                    <div className="space-y-3 relative z-10">
+                      <div className="flex items-center justify-between">
+                        <span className={`w-8 h-8 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center font-bold text-white text-xs shadow-sm`}>
+                          {uom.symbol ? uom.symbol[0].toUpperCase() : uom.name[0].toUpperCase()}
+                        </span>
+                        <span className="bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded text-[10px] font-bold">
+                          {uom.symbol ? `${uom.symbol}` : ''}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-slate-800 group-hover:text-slate-900 transition-colors text-sm sm:text-base leading-snug">
+                          {uom.name}
+                        </h4>
+                        {/* Formula Display */}
+                        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100 p-2">
+                          <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-1">Formula</p>
+                          <p className="text-xs font-mono font-semibold text-slate-800">
+                            {formulaText}
+                          </p>
+                        </div>
+                        {uom.description && (
+                          <p className="text-xs text-slate-500 font-medium mt-1">
+                            {uom.description}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-slate-800 group-hover:text-slate-900 transition-colors text-sm sm:text-base leading-snug">
-                        {uom.name}
-                      </h4>
-                      <p className="text-xs text-slate-500 font-semibold font-mono">
-                        {language === 'bn' ? `সমানুপাতী পরিমাণ: ${uom.multiplier} পিস` : `Equivalence standard: ${uom.multiplier} Units (pcs)`}
-                      </p>
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-1 relative z-10">
+                      <button
+                        type="button"
+                        onClick={() => startEditUnit(uom)}
+                        className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all border border-transparent hover:border-slate-200 cursor-pointer"
+                        title="Edit unit"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUnit(uom.id)}
+                        className="p-2 text-rose-500 hover:text-rose-900 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100 cursor-pointer"
+                        title="Delete unit"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-1 relative z-10">
-                    <button
-                      type="button"
-                      onClick={() => startEditUnit(uom)}
-                      className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all border border-transparent hover:border-slate-200 cursor-pointer"
-                      title="Edit unit"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteUnit(uom.id)}
-                      className="p-2 text-rose-500 hover:text-rose-900 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100 cursor-pointer"
-                      title="Delete unit"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ); })()}
+        );
+      })()}
 
       {/* SUB-TAB: Warehouses / Godowns */}
       {activeSubTab === 'godowns' && (
@@ -2773,8 +2896,8 @@ export default function DirectoryModule({
                         <HardDrive className="w-4 h-4 text-white" />
                       </span>
                       <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${g.isDamageGodown
-                          ? 'bg-rose-50 text-rose-700 border-rose-200'
-                          : 'bg-emerald-50 text-emerald-705 border-emerald-200'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : 'bg-emerald-50 text-emerald-705 border-emerald-200'
                         }`}>
                         {g.isDamageGodown
                           ? (language === 'bn' ? 'ড্যামেজ/ফেরত গুদাম' : 'Damage/Return')
@@ -3063,6 +3186,32 @@ export default function DirectoryModule({
                   </select>
                 </div>
               </div>
+
+              {/* Unit Formula Display */}
+              {(() => {
+                const selectedUnit = units.find(u => u.id === prodUomId);
+                if (!selectedUnit) return null;
+                
+                const baseUnit = units.find(u => !u.parentUnitId) || { name: 'Unit', multiplier: 1, symbol: '' };
+                const parentUnit = selectedUnit.parentUnitId ? units.find(u => u.id === selectedUnit.parentUnitId) : null;
+                
+                let formulaText = `1 ${selectedUnit.name} = ${selectedUnit.multiplier} ${baseUnit.name}`;
+                if (parentUnit) {
+                  const parentToBase = parentUnit.multiplier;
+                  const thisToParent = selectedUnit.multiplier / parentToBase;
+                  formulaText = `1 ${selectedUnit.name} = ${thisToParent} ${parentUnit.name} = ${selectedUnit.multiplier} ${baseUnit.name}`;
+                }
+
+                return (
+                  <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100 p-3 space-y-1">
+                    <div className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Selected Unit Details</div>
+                    <div className="font-mono text-sm font-semibold text-slate-800">{formulaText}</div>
+                    {selectedUnit.description && (
+                      <div className="text-xs text-slate-600">{selectedUnit.description}</div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -3441,7 +3590,7 @@ export default function DirectoryModule({
       {/* MODAL: Unit Setup */}
       {showUnitModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleUnitSubmit} className="bg-white rounded-xl border border-slate-200 w-full max-w-sm shadow-2xl flex flex-col justify-between overflow-hidden">
+          <form onSubmit={handleUnitSubmit} className="bg-white rounded-xl border border-slate-200 w-full max-w-md shadow-2xl flex flex-col justify-between overflow-hidden">
             <div className="border-b border-slate-200 px-6 py-4 bg-slate-50 flex items-center justify-between">
               <span className="font-semibold text-slate-800 text-sm flex items-center gap-1.5">
                 <DollarSign className="w-4.5 h-4.5 text-slate-750" />
@@ -3450,13 +3599,13 @@ export default function DirectoryModule({
               <button type="button" onClick={() => setShowUnitModal(false)} className="text-slate-400 hover:text-slate-855">✕</button>
             </div>
 
-            <div className="p-6 space-y-4 text-xs">
+            <div className="p-6 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
               <div>
-                <label className="mb-2 block text-xs font-semibold text-slate-705">{tDir.formUnitName}</label>
+                <label className="mb-2 block text-xs font-semibold text-slate-705">Unit Name *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Case of 24"
+                  placeholder="e.g. Carton, Dozen, Piece"
                   value={unitName}
                   onChange={e => setUnitName(e.target.value)}
                   className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 font-semibold outline-none focus:border-slate-800 focus:bg-white"
@@ -3464,15 +3613,71 @@ export default function DirectoryModule({
               </div>
 
               <div>
-                <label className="mb-2 block text-xs font-semibold text-slate-705">{tDir.formUnitMultiplier}</label>
+                <label className="mb-2 block text-xs font-semibold text-slate-705">Symbol (Short Name)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. ctn, doz, pc"
+                  value={unitSymbol}
+                  onChange={e => setUnitSymbol(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 font-semibold outline-none focus:border-slate-800 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-slate-705">Parent Unit (For Hierarchy)</label>
+                <select
+                  value={unitParentId}
+                  onChange={e => setUnitParentId(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 font-semibold outline-none focus:border-slate-800"
+                >
+                  <option value="">No Parent (Base Unit)</option>
+                  {units.map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-slate-705">Conversion Multiplier (How many of base unit?)</label>
                 <input
                   type="number"
                   min="1"
                   required
-                  placeholder="e.g. 24"
+                  placeholder="e.g. 240"
                   value={unitMultiplier}
                   onChange={e => setUnitMultiplier(Number(e.target.value))}
                   className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 font-mono font-semibold outline-none focus:border-slate-800 focus:bg-white"
+                />
+              </div>
+
+              {/* Formula Display */}
+              {(() => {
+                const baseUnit = units.find(u => !u.parentUnitId) || { name: 'Base Unit', multiplier: 1, symbol: '' as string | undefined };
+                const parentUnit = unitParentId ? units.find(u => u.id === unitParentId) : null;
+                
+                let formulaText = `1 ${unitName || 'Unit'} = ${unitMultiplier} ${baseUnit.name}`;
+                if (parentUnit) {
+                  const parentToBase = parentUnit.multiplier;
+                  const thisToParent = unitMultiplier / parentToBase;
+                  formulaText = `1 ${unitName || 'Unit'} = ${thisToParent} ${parentUnit.name} = ${unitMultiplier} ${baseUnit.name}`;
+                }
+                
+                return (
+                  <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100 p-3 space-y-1">
+                    <div className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Unit Formula Preview</div>
+                    <div className="font-mono text-sm font-semibold text-slate-800">{formulaText}</div>
+                  </div>
+                );
+              })()}
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-slate-705">Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 1 carton = 20 dozen = 240 pieces"
+                  value={unitDescription}
+                  onChange={e => setUnitDescription(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3.5 font-semibold outline-none focus:border-slate-800 focus:bg-white"
                 />
               </div>
             </div>
